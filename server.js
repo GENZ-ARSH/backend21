@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { protectHomePage } = require('./middleware/auth');
 const { shortenUrl } = require('./utils/linkcents');
+const { csrfProtection } = require('./middleware/csrf');
 
 const app = express();
 
@@ -29,7 +30,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 app.use(session({
-    store: new FileStore({ path: '/tmp/sessions' }), // Vercel ke temporary storage ke liye
+    store: new FileStore({ path: process.env.SESSION_PATH || './sessions' }),
     secret: process.env.JWT_SECRET || 'fallback-secret',
     resave: false,
     saveUninitialized: false,
@@ -41,17 +42,32 @@ app.use(session({
     }
 }));
 
-// CSRF Token Endpoint
-app.get('/api/csrf-token', (req, res) => {
-    res.json({ csrfToken: req.session.csrfToken || 'dummy-token' }); // Replace with actual CSRF token generation if needed
+// Apply CSRF protection middleware globally (except for GET routes)
+app.use((req, res, next) => {
+    if (req.method === 'GET') {
+        // For GET requests, ensure CSRF token is generated and stored in session
+        csrfProtection(req, res, next);
+    } else {
+        // For POST/PUT/DELETE, validate CSRF token
+        csrfProtection(req, res, next);
+    }
 });
 
+// Inject CSRF token into HTML responses for frontend to use
 app.get('/index.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'), {
+        headers: {
+            'X-CSRF-Token': req.session.csrfToken || '' // Pass CSRF token in response header
+        }
+    });
 });
 
 app.get('/', protectHomePage, (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'home.html'));
+    res.sendFile(path.join(__dirname, 'public', 'home.html'), {
+        headers: {
+            'X-CSRF-Token': req.session.csrfToken || '' // Pass CSRF token in response header
+        }
+    });
 });
 
 app.get('/api/shorten', async (req, res) => {
@@ -66,9 +82,7 @@ app.get('/api/shorten', async (req, res) => {
 });
 
 app.get('/callback', (req, res) => {
-    // Simulate generating an access key after the user completes the steps
     const accessKey = jwt.sign({ user: 'genzz-user' }, process.env.JWT_SECRET || 'fallback-secret', { expiresIn: '24h' });
-    // Redirect to home.html with the accessKey as a query parameter
     res.redirect(`/home.html?accessKey=${accessKey}`);
 });
 
