@@ -7,8 +7,6 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const https = require('https');
-const fs = require('fs');
 const path = require('path');
 const { protectHomePage } = require('./middleware/auth');
 const { shortenUrl } = require('./utils/linkcents');
@@ -31,7 +29,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 app.use(session({
-    store: new FileStore({ path: './sessions' }),
+    store: new FileStore({ path: '/tmp/sessions' }), // Vercel ke temporary storage ke liye
     secret: process.env.JWT_SECRET || 'fallback-secret',
     resave: false,
     saveUninitialized: false,
@@ -83,11 +81,7 @@ mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('Connected to MongoDB'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-const options = {
-    key: fs.readFileSync('certs/key.pem'),
-    cert: fs.readFileSync('certs/cert.pem')
-};
-
-https.createServer(options, app).listen(process.env.PORT || 5000, () => {
-    console.log(`HTTPS Server running on port ${process.env.PORT || 5000}`);
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
