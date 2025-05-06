@@ -2,10 +2,7 @@ const shortenUrl = async (url) => {
     try {
         const targetUrl = url || `${process.env.FRONTEND_URL}/home` || 'https://localhost:5000/home';
         console.log('Shortening URL:', targetUrl);
-        const LINKCENTS_API_KEY = process.env.LINKCENTS_API_KEY;
-        if (!LINKCENTS_API_KEY) {
-            throw new Error('LINKCENTS_API_KEY is not defined in environment variables');
-        }
+        const LINKCENTS_API_KEY = 'bb22911fe37d3daa0c26c1f50b43a7a8804b80d4';
         console.log('LINKCENTS_API_KEY:', LINKCENTS_API_KEY);
         const apiUrl = `https://linkcents.com/api?api=${LINKCENTS_API_KEY}&url=${encodeURIComponent(targetUrl)}`;
         console.log('Linkcents API URL:', apiUrl);

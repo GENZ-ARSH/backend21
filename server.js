@@ -7,10 +7,11 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const https = require('https');
+const fs = require('fs');
 const path = require('path');
 const { protectHomePage } = require('./middleware/auth');
 const { shortenUrl } = require('./utils/linkcents');
-const { csrfProtection } = require('./middleware/csrf');
 
 const app = express();
 
@@ -30,7 +31,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 app.use(session({
-    store: new FileStore({ path: process.env.SESSION_PATH || './sessions' }),
+    store: new FileStore({ path: './sessions' }),
     secret: process.env.JWT_SECRET || 'fallback-secret',
     resave: false,
     saveUninitialized: false,
@@ -42,48 +43,23 @@ app.use(session({
     }
 }));
 
-// Apply CSRF protection middleware globally (except for GET routes)
-app.use((req, res, next) => {
-    if (req.method === 'GET') {
-        // For GET requests, ensure CSRF token is generated and stored in session
-        csrfProtection(req, res, next);
-    } else {
-        // For POST/PUT/DELETE, validate CSRF token
-        csrfProtection(req, res, next);
-    }
-});
-
-// Inject CSRF token into HTML responses for frontend to use
 app.get('/index.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'), {
-        headers: {
-            'X-CSRF-Token': req.session.csrfToken || '' // Pass CSRF token in response header
-        }
-    });
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/', protectHomePage, (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'home.html'), {
-        headers: {
-            'X-CSRF-Token': req.session.csrfToken || '' // Pass CSRF token in response header
-        }
-    });
+    res.sendFile(path.join(__dirname, 'public', 'home.html'));
 });
 
 app.get('/api/shorten', async (req, res) => {
     try {
-        const homeUrl = `${process.env.FRONTEND_URL}/callback` || 'https://localhost:5000/callback';
+        const homeUrl = `${process.env.FRONTEND_URL}/home` || 'https://localhost:5000/home';
         const shortenedUrl = await shortenUrl(homeUrl);
         res.json({ shortenedUrl });
     } catch (error) {
         console.error('Shorten API error:', error.message);
         res.status(500).json({ error: 'Failed to shorten URL' });
     }
-});
-
-app.get('/callback', (req, res) => {
-    const accessKey = jwt.sign({ user: 'genzz-user' }, process.env.JWT_SECRET || 'fallback-secret', { expiresIn: '24h' });
-    res.redirect(`/home.html?accessKey=${accessKey}`);
 });
 
 app.use('/api/auth', require('./routes/api/auth'));
@@ -95,7 +71,11 @@ mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('Connected to MongoDB'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+const options = {
+    key: fs.readFileSync('certs/key.pem'),
+    cert: fs.readFileSync('certs/cert.pem')
+};
+
+https.createServer(options, app).listen(process.env.PORT || 5000, () => {
+    console.log(`HTTPS Server running on port ${process.env.PORT || 5000}`);
 });
