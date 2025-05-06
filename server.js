@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { protectHomePage } = require('./middleware/auth');
 const { shortenUrl } = require('./utils/linkcents');
+const { csrfMiddleware } = require('./middleware/csrf');
 
 const app = express();
 
@@ -42,6 +43,20 @@ app.use(session({
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     }
 }));
+
+// Apply CSRF middleware for POST/PUT/DELETE routes to validate token
+app.use((req, res, next) => {
+    if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+        csrfMiddleware(req, res, next);
+    } else {
+        next();
+    }
+});
+
+// Endpoint to fetch CSRF token
+app.get('/api/csrf-token', (req, res, next) => {
+    csrfMiddleware(req, res, next);
+});
 
 app.get('/index.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
